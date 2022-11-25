@@ -27,6 +27,8 @@ import org.springframework.data.jpa.domain.Specification;
 
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Join;
+import javax.persistence.criteria.JoinType;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
@@ -122,8 +124,15 @@ public class JpaSpecificationExpressionVisitor<T> implements ExpressionVisitor<S
                 ExpressionValue<? extends Comparable> operandValue = (ExpressionValue<? extends Comparable>)binaryExpression.getRightOperand();
                 Predicate predicate = null;
                 String fieldName = mappedFieldName(binaryExpression.getLeftOperand().infix());
-                operandValue = getTransformedValue(operandValue);
-                Path path = root.get(fieldName);
+                operandValue = getTransformedValue(operandValue);                
+                
+                String[] paths = fieldName.split("[.]");
+                Path path = getPath(root, null, paths[0]);
+                for (int i = 1; i < paths.length; i++) {
+                    path = getPath(root, path, paths[i]);
+                }
+                criteriaQuery.distinct(true);
+                //Path path = root.get(fieldName);
 
                 switch (binaryExpression.getOperator()) {
                     /* String operations.*/
@@ -140,7 +149,11 @@ public class JpaSpecificationExpressionVisitor<T> implements ExpressionVisitor<S
                         break;
 
                     case EQUALS:
-                        predicate = criteriaBuilder.equal(path,  operandValue.value());
+                        if (operandValue.value() != null) {
+                            predicate = criteriaBuilder.equal(path,  operandValue.value());
+                        } else {
+                            predicate = criteriaBuilder.isNull(path);
+                        }
                         break;
 
                     /* Numeric operations.*/
@@ -153,10 +166,10 @@ public class JpaSpecificationExpressionVisitor<T> implements ExpressionVisitor<S
                         break;
 
                     case EQ:
-                        if (operandValue.value() == null) {
-                            predicate = criteriaBuilder.isNull(path);
+                        if (operandValue.value() != null) {
+                            predicate = criteriaBuilder.equal(path,  operandValue.value());
                         } else {
-                            predicate = criteriaBuilder.equal(path, operandValue.value());
+                            predicate = criteriaBuilder.isNull(path);
                         }
                         break;
 
@@ -183,6 +196,18 @@ public class JpaSpecificationExpressionVisitor<T> implements ExpressionVisitor<S
         };
     }
 
+    private Path getPath(Root<T> root, Path path,String pathName) {
+        if (path == null) {
+            path = root.get(pathName);
+        } else {
+            path = path.get(pathName);
+        }
+        if (path.getClass().getSimpleName().equals("PluralAttributePath")) {
+            path = root.join(pathName, JoinType.INNER);            
+        }
+        return path;
+    }    
+    
     /**
      * Handles the processing of unary
      * expression node.

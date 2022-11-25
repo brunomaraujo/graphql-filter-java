@@ -91,15 +91,50 @@ class FilterExpressionParser {
                         break;
                 }
             } else {
-                /* Case to handle the Field expression.*/
-                ExpressionField leftOperand = new ExpressionField(entry.getKey().toString());
-                BinaryExpression binaryExpression = (BinaryExpression) createExpressionTree((Map)entry.getValue());
-                binaryExpression.setLeftOperand(leftOperand);
-                expression = binaryExpression;
+                /* Case to handle the Field expression.*/                
+                AbstractExpression binaryExpression = (AbstractExpression) createExpressionTree((Map)entry.getValue());
+                if (binaryExpression instanceof CompoundExpression) {
+                    expression = getExpression(entry.getKey().toString(), binaryExpression);
+                } else {
+                    ExpressionField leftOperand = new ExpressionField(entry.getKey().toString() + getOperandName(binaryExpression));
+                    binaryExpression.setLeftOperand(leftOperand);                    
+                    expression = binaryExpression;
+                }                
             }
         }
-
         return expression;
+    }
+
+    private Expression getExpression(String field, AbstractExpression expression) {
+        Expression leftOperand = getOperand(field, expression.getLeftOperand());
+        Expression rightOperand = getOperand(field, expression.getRightOperand());
+        if (expression instanceof CompoundExpression) {
+            return new CompoundExpression(leftOperand, expression.getOperator(), rightOperand);
+        } else {
+            return new BinaryExpression(leftOperand, expression.getOperator(), rightOperand);
+        }          
+    }
+
+    private Expression getOperand(String field, Expression expression) {
+        if (expression instanceof AbstractExpression) {
+            return getExpression(field, (AbstractExpression)expression);
+        } else if (expression instanceof ExpressionField) {
+            return new ExpressionField(field + "." + expression.infix());
+        } else {
+            return expression;
+        }
+    }
+
+    private String getOperandName(AbstractExpression expression) {
+        if (expression.getLeftOperand() != null) {
+            if (expression.getLeftOperand() instanceof AbstractExpression) {
+                return  getOperandName((AbstractExpression)expression.getLeftOperand());
+            } else {
+                return "." + expression.getLeftOperand().infix();
+            }
+        } else {
+            return "";
+        }
     }
 
     private boolean isOperator(String key) {
@@ -113,7 +148,7 @@ class FilterExpressionParser {
     }
 
     private Comparable convertIfDate(Comparable value) {
-        if (value == null) {
+      /*  if (value == null) {
             return null;
         }
         if (value instanceof LocalDate) {
@@ -131,6 +166,8 @@ class FilterExpressionParser {
             value = java.util.Date
                     .from(offsetDateTime.toInstant());
         }
+        return value;*/
+
         return value;
     }
 
